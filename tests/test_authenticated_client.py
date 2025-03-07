@@ -107,6 +107,14 @@ class TestAuthenticatedClient(object):
         assert 'type' in r[0]
         assert 'ref' in r[0]
 
+    def test_convert_stablecoin(self, client):
+        r = client.convert_stablecoin('10.0', 'USD', 'USDC')
+        assert type(r) is dict
+        assert 'id' in r
+        assert r['amount'] == '10.00000000'
+        assert r['from'] == 'USD'
+        assert r['to'] == 'USDC'
+
     def test_place_order(self, client):
         r = client.place_order('BTC-USD', 'buy', 'limit',
                                price=0.62, size=0.0144)
@@ -130,12 +138,20 @@ class TestAuthenticatedClient(object):
         r = client.place_market_order('BTC-USD', 'buy', funds=100000)
         assert type(r) is dict
 
-    def test_place_stop_order(self, client):
+    @pytest.mark.parametrize('stop_type', ['entry', 'loss'])
+    def test_place_stop_order(self, client, stop_type):
         client.cancel_all()
-        r = client.place_stop_order('BTC-USD', 'buy', 1, 0.01)
+        r = client.place_stop_order('BTC-USD', stop_type, 100, 0.01)
         assert type(r) is dict
-        assert r['type'] == 'stop'
+        assert r['stop'] == stop_type
+        assert r['stop_price'] == '100'
+        assert r['type'] == 'limit'
         client.cancel_order(r['id'])
+
+    def test_place_invalid_stop_order(self, client):
+        client.cancel_all()
+        with pytest.raises(ValueError):
+            client.place_stop_order('BTC-USD', 'fake_stop_type', 5.65, 0.01)
 
     def test_cancel_order(self, client):
         r = client.place_limit_order('BTC-USD', 'buy', 4.43, 0.01232)

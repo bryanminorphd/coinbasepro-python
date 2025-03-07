@@ -107,7 +107,7 @@ public_client.get_time()
 Not all API endpoints are available to everyone.
 Those requiring user authentication can be reached using `AuthenticatedClient`.
 You must setup API access within your
-[account settings](https://www.pro.coinbase.com/settings/api).
+[account settings](https://pro.coinbase.com/profile/api).
 The `AuthenticatedClient` inherits all methods from the `PublicClient`
 class, so you will only need to initialize one if you are planning to
 integrate both into your script.
@@ -201,7 +201,7 @@ auth_client.place_market_order(product_id='BTC-USD',
 ```python
 # Stop order. `funds` can be used instead of `size` here.
 auth_client.place_stop_order(product_id='BTC-USD', 
-                              side='buy', 
+                              stop_type='loss', 
                               price='200.00', 
                               size='0.01')
 ```
@@ -260,8 +260,11 @@ If you would like to receive real-time market updates, you must subscribe to the
 #### Subscribe to a single product
 ```python
 import cbpro
-# Paramters are optional
-wsClient = cbpro.WebsocketClient(url="wss://ws-feed.pro.coinbase.com", products="BTC-USD")
+
+# Parameters are optional
+wsClient = cbpro.WebsocketClient(url="wss://ws-feed.pro.coinbase.com",
+                                products="BTC-USD",
+                                channels=["ticker"])
 # Do other stuff...
 wsClient.close()
 ```
@@ -269,9 +272,10 @@ wsClient.close()
 #### Subscribe to multiple products
 ```python
 import cbpro
-# Paramaters are optional
+# Parameters are optional
 wsClient = cbpro.WebsocketClient(url="wss://ws-feed.pro.coinbase.com",
-                                products=["BTC-USD", "ETH-USD"])
+                                products=["BTC-USD", "ETH-USD"],
+                                channels=["ticker"])
 # Do other stuff...
 wsClient.close()
 ```
@@ -342,16 +346,29 @@ python -m pytest
 ```
 
 ### Real-time OrderBook
-The ```OrderBook``` subscribes to a websocket and keeps a real-time record of
-the orderbook for the product_id input.  Please provide your feedback for future
+The ```OrderBook``` is a convenient data structure to keep a real-time record of
+the orderbook for the product_id input. It processes incoming messages from an
+already existing WebsocketClient. Please provide your feedback for future
 improvements.
 
 ```python
-import cbpro, time
-order_book = cbpro.OrderBook(product_id='BTC-USD')
-order_book.start()
+import cbpro, time, Queue
+class myWebsocketClient(cbpro.WebsocketClient):
+    def on_open(self):
+        self.products = ['BTC-USD', 'ETH-USD']
+        self.order_book_btc = OrderBookConsole(product_id='BTC-USD')
+        self.order_book_eth = OrderBookConsole(product_id='ETH-USD')
+    def on_message(self, msg):
+        self.order_book_btc.process_message(msg)
+        self.order_book_eth.process_message(msg)
+
+wsClient = myWebsocketClient()
+wsClient.start()
 time.sleep(10)
-order_book.close()
+while True:
+    print(wsClient.order_book_btc.get_ask())
+    print(wsClient.order_book_eth.get_bid())
+    time.sleep(1)
 ```
 
 ### Testing
